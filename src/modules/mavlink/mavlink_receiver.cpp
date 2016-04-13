@@ -770,62 +770,80 @@ MavlinkReceiver::handle_message_set_position_target_local_ned(mavlink_message_t 
 void
 MavlinkReceiver::handle_message_set_actuator_control_target(mavlink_message_t *msg)
 {
-    // test comment
-	mavlink_set_actuator_control_target_t set_actuator_control_target;
-	mavlink_msg_set_actuator_control_target_decode(msg, &set_actuator_control_target);
-
-	struct offboard_control_mode_s offboard_control_mode;
-	memset(&offboard_control_mode, 0, sizeof(offboard_control_mode));//XXX breaks compatibility with multiple setpoints
-
-	struct actuator_controls_s actuator_controls;
-	memset(&actuator_controls, 0, sizeof(actuator_controls));//XXX breaks compatibility with multiple setpoints
-
-	if ((mavlink_system.sysid == set_actuator_control_target.target_system ||
-		    set_actuator_control_target.target_system == 0) &&
-		(mavlink_system.compid == set_actuator_control_target.target_component ||
-		    set_actuator_control_target.target_component == 0)) {
-
-		/* ignore all since we are setting raw actuators here */
-		offboard_control_mode.ignore_thrust             = true;
-		offboard_control_mode.ignore_attitude           = true;
-		offboard_control_mode.ignore_bodyrate           = true;
-		offboard_control_mode.ignore_position           = true;
-		offboard_control_mode.ignore_velocity           = true;
-		offboard_control_mode.ignore_acceleration_force = true;
-
-		offboard_control_mode.timestamp = hrt_absolute_time();
-
-		if (_offboard_control_mode_pub == nullptr) {
-			_offboard_control_mode_pub = orb_advertise(ORB_ID(offboard_control_mode), &offboard_control_mode);
-		} else {
-			orb_publish(ORB_ID(offboard_control_mode), _offboard_control_mode_pub, &offboard_control_mode);
-		}
-
-
-		/* If we are in offboard control mode, publish the actuator controls */
-		bool updated;
-		orb_check(_control_mode_sub, &updated);
-		if (updated) {
-			orb_copy(ORB_ID(vehicle_control_mode), _control_mode_sub, &_control_mode);
-		}
-
-		if (_control_mode.flag_control_offboard_enabled) {
-
-			actuator_controls.timestamp = hrt_absolute_time();
-
-			/* Set duty cycles for the servos in actuator_controls_0 */
-			for(size_t i = 0; i < 8; i++) {
-				actuator_controls.control[i] = set_actuator_control_target.controls[i];
-			}
-
-			if (_actuator_controls_pub == nullptr) {
-				_actuator_controls_pub = orb_advertise(ORB_ID(actuator_controls_0), &actuator_controls);
-			} else {
-				orb_publish(ORB_ID(actuator_controls_0), _actuator_controls_pub, &actuator_controls);
-			}
-		}
-	}
-
+    mavlink_set_actuator_control_target_t set_actuator_control_target;
+    mavlink_msg_set_actuator_control_target_decode(msg, &set_actuator_control_target);
+    
+    struct offboard_control_mode_s offboard_control_mode;
+    memset(&offboard_control_mode, 0, sizeof(offboard_control_mode));//XXX breaks compatibility with multiple setpoints
+    
+    struct actuator_controls_s actuator_controls;
+    memset(&actuator_controls, 0, sizeof(actuator_controls));//XXX breaks compatibility with multiple setpoints
+    
+    if ((mavlink_system.sysid == set_actuator_control_target.target_system ||
+         set_actuator_control_target.target_system == 0) &&
+        (mavlink_system.compid == set_actuator_control_target.target_component ||
+         set_actuator_control_target.target_component == 0)) {
+            
+            if (set_actuator_control_target.group_mlx == 0) {
+                /* ignore all since we are setting raw actuators here */
+                offboard_control_mode.ignore_thrust             = true;
+                offboard_control_mode.ignore_attitude           = true;
+                offboard_control_mode.ignore_bodyrate           = true;
+                offboard_control_mode.ignore_position           = true;
+                offboard_control_mode.ignore_velocity           = true;
+                offboard_control_mode.ignore_acceleration_force = true;
+                
+                offboard_control_mode.timestamp = hrt_absolute_time();
+                
+                if (_offboard_control_mode_pub == nullptr) {
+                    _offboard_control_mode_pub = orb_advertise(ORB_ID(offboard_control_mode), &offboard_control_mode);
+                } else {
+                    orb_publish(ORB_ID(offboard_control_mode), _offboard_control_mode_pub, &offboard_control_mode);
+                }
+                
+                
+                /* If we are in offboard control mode, publish the actuator controls */
+                bool updated;
+                orb_check(_control_mode_sub, &updated);
+                if (updated) {
+                    orb_copy(ORB_ID(vehicle_control_mode), _control_mode_sub, &_control_mode);
+                }
+                
+                if (_control_mode.flag_control_offboard_enabled) {
+                    
+                    actuator_controls.timestamp = hrt_absolute_time();
+                    
+                    /* Set duty cycles for the servos in actuator_controls_0 */
+                    for(size_t i = 0; i < 8; i++) {
+                        actuator_controls.control[i] = set_actuator_control_target.controls[i];
+                    }
+                    
+                    if (_actuator_controls_pub == nullptr) {
+                        _actuator_controls_pub = orb_advertise(ORB_ID(actuator_controls_0), &actuator_controls);
+                    } else {
+                        orb_publish(ORB_ID(actuator_controls_0), _actuator_controls_pub, &actuator_controls);
+                    }
+                }
+            }// end of checking group=0
+            /* for the AUX outputs
+             * Make sure to run pass.aux.mix (aux mixer) in the Nuttx shell
+             * nsh> mixer load /dev/pwm_output1 /etc/mixers/pass.aux.mix
+             */
+            else if(set_actuator_control_target.group_mlx == 3){
+                actuator_controls.timestamp = hrt_absolute_time();
+                for(size_t i = 0; i < 8; i++) {
+                    actuator_controls.control[i] = set_actuator_control_target.controls[i];
+                }
+                
+                if (_actuator_controls_pub == nullptr) {
+                    _actuator_controls_pub = orb_advertise(ORB_ID(actuator_controls_3), &actuator_controls);
+                } else {
+                    orb_publish(ORB_ID(actuator_controls_3), _actuator_controls_pub, &actuator_controls);
+                }
+                
+            }// end: checking if control group=3
+        }
+    
 }
 
 void
