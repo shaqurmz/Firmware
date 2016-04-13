@@ -770,6 +770,7 @@ MavlinkReceiver::handle_message_set_position_target_local_ned(mavlink_message_t 
 void
 MavlinkReceiver::handle_message_set_actuator_control_target(mavlink_message_t *msg)
 {
+    // test comment
 	mavlink_set_actuator_control_target_t set_actuator_control_target;
 	mavlink_msg_set_actuator_control_target_decode(msg, &set_actuator_control_target);
 
